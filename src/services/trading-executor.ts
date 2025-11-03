@@ -227,12 +227,83 @@ export class TradingExecutor {
       // 执行主订单
       const orderResponse = await this.binanceService.placeOrder(binanceOrder);
 
+      // 对于市价单，等待一小段时间后查询订单状态以获取实际的执行价格和数量
+      let finalQuantity = orderResponse.executedQty;
+      let finalPrice = orderResponse.avgPrice;
+      
+      // 如果执行数量或价格为0，尝试查询订单状态获取最新信息
+      if (orderResponse.type === 'MARKET' || 
+          parseFloat(orderResponse.executedQty) === 0 || 
+          parseFloat(orderResponse.avgPrice || '0') === 0) {
+        try {
+          // 等待1秒让订单执行
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // 查询订单状态
+          const orderStatus = await this.binanceService.getOrderStatus(
+            orderResponse.symbol, 
+            orderResponse.orderId
+          );
+          
+          // 如果查询到的值有效，使用它们
+          if (orderStatus) {
+            if (parseFloat(orderStatus.executedQty) > 0) {
+              finalQuantity = orderStatus.executedQty;
+            } else if (parseFloat(orderStatus.origQty) > 0) {
+              // 如果执行数量仍为0，使用原始订单数量
+              finalQuantity = orderStatus.origQty;
+            }
+            
+            if (parseFloat(orderStatus.avgPrice || '0') > 0) {
+              finalPrice = orderStatus.avgPrice;
+            } else {
+              // 如果价格仍为0，尝试获取当前市场价格
+              try {
+                const ticker = await this.binanceService.get24hrTicker(orderResponse.symbol);
+                if (ticker && ticker.lastPrice) {
+                  finalPrice = ticker.lastPrice;
+                }
+              } catch (priceError) {
+                // 如果获取价格失败，使用'Market'作为备用
+                if (!finalPrice) {
+                  finalPrice = 'Market';
+                }
+              }
+            }
+          }
+        } catch (statusError) {
+          console.warn(`⚠️ Failed to query order status: ${statusError instanceof Error ? statusError.message : 'Unknown error'}`);
+          // 如果查询失败，使用原始订单数量作为备用
+          if (parseFloat(finalQuantity) === 0 && parseFloat(orderResponse.origQty) > 0) {
+            finalQuantity = orderResponse.origQty;
+          }
+          // 如果价格为0，尝试获取当前市场价格
+          if (parseFloat(finalPrice || '0') === 0) {
+            try {
+              const ticker = await this.binanceService.get24hrTicker(orderResponse.symbol);
+              if (ticker && ticker.lastPrice) {
+                finalPrice = ticker.lastPrice;
+              } else {
+                finalPrice = 'Market';
+              }
+            } catch (priceError) {
+              finalPrice = 'Market';
+            }
+          }
+        }
+      }
+
+      // 如果数量仍为0，使用交易计划中的数量
+      if (parseFloat(finalQuantity) === 0) {
+        finalQuantity = this.binanceService.formatQuantity(tradingPlan.quantity, tradingPlan.symbol);
+      }
+
       console.log(`✅ Order executed successfully:`);
       console.log(`   Order ID: ${orderResponse.orderId}`);
       console.log(`   Symbol: ${orderResponse.symbol}`);
       console.log(`   Status: ${orderResponse.status}`);
-      console.log(`   Price: ${orderResponse.avgPrice || 'Market'}`);
-      console.log(`   Quantity: ${orderResponse.executedQty}`);
+      console.log(`   Price: ${finalPrice}`);
+      console.log(`   Quantity: ${finalQuantity}`);
 
       const telegramConfig = this.configManager.getConfig().telegram;
       if (telegramConfig.enabled) {
@@ -240,8 +311,8 @@ export class TradingExecutor {
         const formattedMessage = telegramService.formatTradeMessage({
           symbol: orderResponse.symbol,
           side: tradingPlan.side,
-          quantity: orderResponse.executedQty,
-          price: orderResponse.avgPrice || 'Market',
+          quantity: finalQuantity,
+          price: finalPrice || 'Market',
           orderId: orderResponse.orderId.toString(),
           status: orderResponse.status,
           leverage: tradingPlan.leverage,

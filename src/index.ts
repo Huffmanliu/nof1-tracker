@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+// 首先导入 logger 以确保 console 重定向在应用启动时生效
+import './utils/logger';
+
 import { Command } from 'commander';
 import * as dotenv from 'dotenv';
 import {

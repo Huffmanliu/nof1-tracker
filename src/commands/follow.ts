@@ -74,7 +74,15 @@ export async function handleFollowCommand(agentName: string, options: CommandOpt
     try {
       pollingCount++;
       if (pollingCount > 1) {
-        console.log(`\n--- Poll #${pollingCount} ---`);
+        // 格式化日期时间：YYYY MM DD HH:mm
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const dateTime = `${year} ${month} ${day} ${hours}:${minutes}`;
+        console.log(`\n--- ${dateTime}---Poll #${pollingCount} ---`);
       }
 
       const followOptions = {

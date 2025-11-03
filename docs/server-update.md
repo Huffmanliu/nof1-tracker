@@ -38,7 +38,9 @@ git pull
 
 # 方式2: 配置 git credential helper（推荐）
 git config --global credential.helper store
-# 然后输入: https://YOUR_TOKEN@github.com
+# 然后在首次 git pull 时会提示输入用户名和 token
+# Username: your-email@example.com
+# Password: 粘贴您的 GitHub Personal Access Token（不是密码）
 
 # 方式3: 使用 SSH（最推荐，需要配置SSH key）
 # 如果已经配置SSH key，直接：

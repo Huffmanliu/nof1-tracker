@@ -47,7 +47,7 @@ npm start -- agents
 npm start -- telegram-test
 
 # 5. 开始跟单（风险控制模式，不会真实交易）
-npm start -- follow deepseek-chat-v3.1 --risk-only
+c
 
 # 6. 持续监控跟单（每30秒检查一次）
 npm start -- follow gpt-5 --interval 30

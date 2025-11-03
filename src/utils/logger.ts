@@ -112,10 +112,14 @@ class RotatingFileTransport extends winston.transports.File {
     });
   }
 
-  log(info: any, callback: () => void): void {
+  log(info: any, callback?: () => void): void {
     // 在写入前检查并轮转
     rotateLogFile();
-    super.log(info, callback);
+    if (callback) {
+      super.log(info, callback);
+    } else {
+      super.log(info);
+    }
   }
 }
 
@@ -133,8 +137,8 @@ const logger = winston.createLogger({
   transports: [
     // 控制台输出（保持原有格式，不带时间戳）
     new winston.transports.Console({
-      format: winston.format.printf(({ message }) => {
-        return message; // 直接输出消息，保持原有的 emoji 格式
+      format: winston.format.printf(({ message }): string => {
+        return String(message); // 直接输出消息，保持原有的 emoji 格式
       }),
       silent: false, // 总是输出到控制台
     }),

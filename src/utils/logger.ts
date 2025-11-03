@@ -115,11 +115,9 @@ class RotatingFileTransport extends winston.transports.File {
   log(info: any, callback?: () => void): void {
     // 在写入前检查并轮转
     rotateLogFile();
-    if (callback) {
-      super.log(info, callback);
-    } else {
-      super.log(info);
-    }
+    // 一律传入一个兜底回调，兼容更严格的类型定义
+    const done = typeof callback === 'function' ? callback : () => {};
+    super.log(info, done);
   }
 }
 

@@ -82,15 +82,12 @@
     - 需要 `order-history.json` 文件存在且有历史记录才能进行匹配
     - 如果历史文件不存在或为空，会按不匹配处理（执行清仓换仓）
     - 同时检查持仓方向（多空），方向不一致视为不匹配
-    
-    **修改文件：**
-    - `src/services/follow-service.ts` - 新增 OID 匹配检查和智能持仓保持逻辑
   
   **修改文件：**
   - `src/utils/logger.ts` - 实现日志系统和轮转机制
   - `src/index.ts` - 在应用启动时初始化日志系统
   - `src/commands/follow.ts` - 添加 poll 日期时间标记
-  - `src/services/follow-service.ts` - 智能持仓保持功能
+  - `src/services/follow-service.ts` - 智能持仓保持功能（新增 OID 匹配检查和持仓保持逻辑）
 
 ### 修复
 - **Telegram消息格式错误 - 价格和数量显示为0** (2025-11-03)

@@ -23,29 +23,42 @@ let lastFileSize = 0;
 let lastCheckTime = 0;
 const CHECK_INTERVAL = 1000; // 每1秒最多检查一次
 
+// 用于跟踪文件 transport，以便在轮转后重新创建
+let fileTransport: RotatingFileTransport | null = null;
+
 /**
  * 轮转日志文件
  * 当文件大小超过限制时，将旧文件重命名为 app.log.1, app.log.2, ... app.log.50
+ * 返回 true 表示发生了轮转，需要重新创建 transport
  */
-function rotateLogFile(): void {
+function rotateLogFile(): boolean {
   try {
     const now = Date.now();
     // 如果距离上次检查时间太短，且上次检查时文件大小未超过限制，则跳过
     if (now - lastCheckTime < CHECK_INTERVAL && lastFileSize < MAX_FILE_SIZE) {
-      return;
+      return false;
     }
     lastCheckTime = now;
 
     // 检查主日志文件是否存在以及大小
     if (!fs.existsSync(LOG_FILE)) {
       lastFileSize = 0;
-      return;
+      return false;
     }
 
     const stats = fs.statSync(LOG_FILE);
     lastFileSize = stats.size;
     if (stats.size < MAX_FILE_SIZE) {
-      return; // 文件大小未超过限制，不需要轮转
+      return false; // 文件大小未超过限制，不需要轮转
+    }
+
+    // 需要轮转：先关闭当前 transport 的文件流
+    if (fileTransport && typeof fileTransport.close === 'function') {
+      try {
+        fileTransport.close();
+      } catch (e) {
+        // 忽略关闭错误
+      }
     }
 
     // 删除最旧的日志文件（如果存在）
@@ -74,10 +87,14 @@ function rotateLogFile(): void {
       fs.moveSync(LOG_FILE, firstRotatedLog, { overwrite: true });
       lastFileSize = 0; // 重置文件大小，因为文件已被重命名
     }
+
+    // 标记需要重新创建 transport
+    return true;
   } catch (error) {
     // 轮转失败时，直接输出到原始 console.error，避免递归日志
     // 使用 process.stderr.write 避免触发重定向的 console.error
     process.stderr.write(`Failed to rotate log file: ${error instanceof Error ? error.message : String(error)}\n`);
+    return false;
   }
 }
 
@@ -114,7 +131,25 @@ class RotatingFileTransport extends winston.transports.File {
 
   log(info: any, callback?: () => void): void {
     // 在写入前检查并轮转
-    rotateLogFile();
+    const needsRecreate = rotateLogFile();
+    
+    // 如果发生了轮转，需要重新创建 transport
+    if (needsRecreate && fileTransport) {
+      try {
+        // 创建新的 transport
+        const newTransport = new RotatingFileTransport();
+        // 替换 logger 中的 transport
+        const fileTransportIndex = logger.transports.findIndex(t => t === fileTransport);
+        if (fileTransportIndex !== -1) {
+          logger.remove(fileTransport);
+          logger.add(newTransport);
+          fileTransport = newTransport;
+        }
+      } catch (e) {
+        process.stderr.write(`Failed to recreate transport: ${e instanceof Error ? e.message : String(e)}\n`);
+      }
+    }
+    
     // 一律传入一个兜底回调，兼容更严格的类型定义
     const done = typeof callback === 'function' ? callback : () => {};
     // 使用类型断言确保调用安全
@@ -144,7 +179,10 @@ const logger = winston.createLogger({
       silent: false, // 总是输出到控制台
     }),
     // 文件输出（使用自定义轮转 transport）
-    new RotatingFileTransport(),
+    (() => {
+      fileTransport = new RotatingFileTransport();
+      return fileTransport;
+    })(),
   ],
 });
 
